@@ -13,4 +13,4 @@ const Device = new Schema({
     name: {type: String}
 });
 
-module.exports = mongoose.model('Alert', Device);
+module.exports = mongoose.model('Device', Device);

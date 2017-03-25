@@ -11,7 +11,6 @@ const Informations = new Schema({
         default: Date.now
     },
     temperature: {type: Number},
-    barometricPressure: {type: Number},
     humidity: {type: Number}
 });
 
