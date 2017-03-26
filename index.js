@@ -13,19 +13,22 @@ mongoose.connect('mongodb://localhost/cityhacker');
 
 const app = express();
 
+const http = require('http').Server(app);
+const io = require('socket.io')(http);
+
+var connections = {};
+
 app.use(bodyParser.urlencoded({ extended: true }));
 
 app.post('/informations', function(req, res) {
-    console.log(req.headers.identifier);
-    console.log(req.body);
     const body = req.body;
-    const deviceId = req.device;
+    const deviceId = req.headers.identifier;
 
     if (!deviceId) {
         res.status(401).send('No device id');
         return;
     }
-    Device.find({id: deviceId}, function(err, deviceFound) {
+    Device.findOne({id: deviceId}, function(err, deviceFound) {
         if (err || !deviceFound) {
             res.status(404).send('device not found');
             return;
@@ -46,17 +49,25 @@ app.post('/informations', function(req, res) {
 
 });
 
-app.post('/record', function(req, res) {
-    console.log(req.headers.identifier);
+app.post('/alertStop', function(req, res) {
     console.log(req.body);
+    res.status(200).send('No device id');
 
+    const socket = connections["test"];
+    if (socket) {
+        socket.emit("test-alert-stop", { hello: 'world' });
+    }
+});
+
+app.post('/alert', function(req, res) {
+    console.log(req.body);
     const body = req.body;
-    const deviceId = body.deviceId;
+    const deviceId = req.headers.identifier;
     if (!deviceId) {
         res.status(401).send('No device id');
         return;
     }
-    Device.find({id: deviceId}, function(err, deviceFound) {
+    Device.findOne({id: deviceId}, function(err, deviceFound) {
         if (err || !deviceFound) {
             res.status(404).send('device not found');
             return;
@@ -69,34 +80,75 @@ app.post('/record', function(req, res) {
                 z: body.accelz
             }
         });
+        const socket = connections["test"];
+        if (socket) {
+            socket.emit("test-alert", { hello: 'world' });
+        }
+        res.status(200).send(alert);
     });
 });
 
-app.post('/createDevice', function(req, res) {
+app.post('/device', function(req, res) {
     const deviceId = req.body.deviceId;
     const name = req.body.name;
 
-    if (!deviceId || !name) {
+    if (!deviceId) {
         res.status(401).send('bad arguments');
         return;
     }
-    var device = new Device({
-        id: deviceId,
-        name: name
-    });
-    device.save(function(err) {
+    Device.findOne({id: deviceId}, function(err, device) {
         if (err) {
             res.status(500).send('Error server');
             return;
         }
-        res.status(200).send(device);
-    })
+        if (device) {
+            res.status(200).send(device);
+            return;
+        }
+        var device = new Device({
+            id: deviceId,
+            name: name
+        });
+        device.save(function(err) {
+            if (err) {
+                res.status(500).send('Error server');
+                return;
+            }
+            res.status(200).send(device);
+        });
+    });
+});
+
+io.set('authorization', function (handshakeData, accept) {
+    if (handshakeData.headers) {
+        const headers = handshakeData.headers;
+        const deviceId = headers["device-id"];
+        if (!deviceId) {
+            accept(null, false);
+            return;
+        }
+        accept(null, true);
+    }
+    else {
+        accept(null, false);
+    }
+});
+
+io.on('connection', function(socket) {
+    const headers = socket.handshake.headers
+    const deviceId = headers["device-id"];
+    console.log("connection device : " + deviceId["device-id"]);
+    if (deviceId) {
+        connections[deviceId] = socket;
+    }
+    console.log('a user connected : ' + deviceId);
+     io.on('disconnect', function(socket) {
+        console.log("disconnect");
+    });
 });
 
 app.get('/', function(req, res) {
     return res.json("cityhack17 API");
 });
 
-app.listen("4242", function() {
-    console.log('server running ...');
-});
+http.listen(4242, "0.0.0.0");
